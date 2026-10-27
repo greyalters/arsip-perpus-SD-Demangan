@@ -6,6 +6,9 @@
 
 const TIMEOUT = 7000;
 
+// Run close to Indonesia (Singapore); some .go.id sites refuse far-away servers.
+export const config = { regions: ['sin1'] };
+
 async function get(url, opts = {}) {
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), TIMEOUT);
@@ -51,7 +54,7 @@ async function sibi(isbn, log) {
         year: String(pick(hit, /year|tahun/i) || '').match(/\d{4}/)?.[0] || '',
         place: 'Jakarta', cat: 'Buku Pelajaran', source: 'SIBI Kemendikbud',
       };
-    } catch (e) { log.push({ source: 'sibi', url: u, error: String(e) }); }
+    } catch (e) { log.push({ source: 'sibi', url: u, error: String(e), cause: String(e.cause?.code || e.cause?.message || '') }); }
   }
   return null;
 }
@@ -70,7 +73,7 @@ async function perpusnas(isbn, log) {
     const year = (cells.join(' ').match(/\b(19|20)\d{2}\b/) || [''])[0];
     const rest = cells.filter(c => c !== title && !/^[\d\-\s]+$/.test(c));
     return title ? { title, publisher: rest[0] || '', authors: rest[1] || '', year, source: 'Perpusnas' } : null;
-  } catch (e) { log.push({ source: 'perpusnas', url: u, error: String(e) }); return null; }
+  } catch (e) { log.push({ source: 'perpusnas', url: u, error: String(e), cause: String(e.cause?.code || e.cause?.message || '') }); return null; }
 }
 
 export default async function handler(req, res) {
