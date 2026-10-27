@@ -8,55 +8,90 @@
 <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
 <style>
-/* Layout: one narrow column, phone-first. Three tabs (Scan / Foto / Daftar) */
+/* Layout: phone-first single column; teal header band, sticky segmented tabs, white cards on a cool paper ground */
 :root{
-  --bg:#f6f7f2; --surface:#ffffff; --fg:#1f2a24; --muted:#5f6b63; --line:#d9ded6;
-  --accent:#2f6b4f; --accent-fg:#ffffff; --warn:#a4561b; --chip:#e7eee8;
+  --bg:#f3f5f4; --surface:#ffffff; --fg:#17231f; --muted:#64716c; --line:#e1e6e3;
+  --accent:#0f6e64; --accent-soft:#e3f1ee; --accent-fg:#ffffff; --warn:#b4531a; --warn-soft:#fbeee4;
+  --band:#0f4f48; --band-fg:#eaf6f3;
   --display:"Fraunces",Georgia,serif; --body:"Atkinson Hyperlegible",system-ui,sans-serif;
+  --r:14px; --shadow:0 1px 2px rgba(15,40,35,.06),0 4px 16px rgba(15,40,35,.05);
 }
-@media (prefers-color-scheme: dark){:root{
-  --bg:#141a16; --surface:#1c241f; --fg:#e6ece7; --muted:#9aa79f; --line:#2f3a33;
-  --accent:#6fbf94; --accent-fg:#0f1a14; --warn:#e2a06a; --chip:#26322b; color-scheme:dark}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1513; --surface:#18201d; --fg:#e7eeeb; --muted:#97a59f; --line:#26302c;
+  --accent:#5cc3b3; --accent-soft:#1d2f2b; --accent-fg:#06201c; --warn:#f0a46e; --warn-soft:#33241a;
+  --band:#123b36; --band-fg:#e7f4f1; --shadow:none; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1513; --surface:#18201d; --fg:#e7eeeb; --muted:#97a59f; --line:#26302c;
+  --accent:#5cc3b3; --accent-soft:#1d2f2b; --accent-fg:#06201c; --warn:#f0a46e; --warn-soft:#33241a;
+  --band:#123b36; --band-fg:#e7f4f1; --shadow:none; color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--body)}
-.wrap{max-width:640px;margin:0 auto;padding-block:16px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-h1{font-family:var(--display);font-size:1.5rem;margin:0;text-wrap:balance}
-.sub{color:var(--muted);margin:2px 0 16px;font-size:.9rem}
-nav{display:flex;gap:6px;margin-bottom:16px}
-nav button{flex:1;padding:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;font:inherit;font-weight:700}
-nav button[aria-selected=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
-section{display:grid;gap:12px}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
-label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
-input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px;width:100%}
-.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
-.btn{padding:11px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:700;cursor:pointer}
-.btn.ghost{background:transparent;color:var(--accent)}
-.btn:focus-visible,nav button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-#reader{width:100%;border-radius:8px;overflow:hidden}
-.status{font-size:.9rem;color:var(--muted)}.status.warn{color:var(--warn)}
-.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow:auto}
-.chips button{border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:6px;padding:6px 8px;font:inherit;font-size:.85rem;text-align:left}
-.chips button.on{border-color:var(--accent);outline:2px solid var(--accent)}
-.targets{display:flex;flex-wrap:wrap;gap:6px}
-.targets button{padding:6px 10px;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);font:inherit;font-size:.85rem}
-.book{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:start;border-bottom:1px solid var(--line);padding:10px 0}
-.book img,.book .ph{width:48px;height:66px;object-fit:cover;border-radius:4px;background:var(--chip)}
-.book b{display:block}.book small{color:var(--muted)}
-.book div{min-width:0}
-.tag{font-size:.75rem;padding:1px 6px;border-radius:999px;background:var(--chip);color:var(--muted)}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--body);-webkit-tap-highlight-color:transparent}
+header{background:var(--band);color:var(--band-fg)}
+header .in,.wrap,.tabs .in{max-width:620px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header .in{padding-block:22px 18px}
+.eyebrow{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;opacity:.75;margin:0}
+h1{font-family:var(--display);font-weight:600;font-size:1.65rem;line-height:1.15;margin:4px 0 2px;text-wrap:balance}
+.sub{margin:0;font-size:.88rem;opacity:.8}
+.tabs{position:sticky;top:env(safe-area-inset-top,0px);z-index:5;background:var(--bg);padding-block:12px;border-bottom:1px solid var(--line)}
+nav{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+nav button{padding:9px 6px;border:0;background:transparent;color:var(--muted);border-radius:9px;font:inherit;font-size:.9rem;font-weight:700;cursor:pointer}
+nav button[aria-selected=true]{background:var(--accent);color:var(--accent-fg)}
 .count{font-variant-numeric:tabular-nums}
+.wrap{padding-block:16px 96px;display:grid;gap:14px}
+section{display:grid;gap:14px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:16px;display:grid;gap:12px;box-shadow:var(--shadow)}
+#p-form{border-color:var(--accent)}
+#p-form strong{font-family:var(--display);font-size:1.15rem;font-weight:600}
+label{display:grid;gap:5px;font-size:.8rem;font-weight:700;color:var(--muted);letter-spacing:.01em}
+input,select,textarea{font:inherit;font-weight:400;font-size:1rem;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:11px 12px;width:100%;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}
+input[type=file]{padding:10px;background:var(--accent-soft);border-style:dashed;border-color:var(--accent)}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1;min-width:130px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:46px;padding:10px 16px;border-radius:11px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:700;cursor:pointer;transition:transform .08s}
+.btn:active{transform:scale(.98)}
+.btn.ghost{background:transparent;color:var(--accent);border-color:var(--line)}
+.btn:focus-visible,nav button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#reader{width:100%;min-height:0;border-radius:12px;overflow:hidden;background:var(--bg)}
+#reader:empty{aspect-ratio:16/9;border:1.5px dashed var(--line);display:grid;place-items:center}
+#reader:empty::after{content:"▮▯▮▮▯▮▯▮▮";letter-spacing:2px;color:var(--muted);opacity:.5;font-size:1.4rem}
+.status{font-size:.88rem;color:var(--muted);font-weight:400;letter-spacing:0}
+.status.warn{color:var(--warn);background:var(--warn-soft);padding:10px 12px;border-radius:10px}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:280px;overflow:auto}
+.chips:empty{display:none}
+.chips button{border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:7px 10px;font:inherit;font-size:.85rem;text-align:left;cursor:pointer}
+.chips button.on{border-color:var(--accent);background:var(--accent-soft);box-shadow:inset 0 0 0 1px var(--accent)}
+.targets{display:flex;flex-wrap:wrap;gap:6px;align-items:center;position:sticky;bottom:calc(8px + env(safe-area-inset-bottom,0px));background:var(--surface);padding:8px;border-radius:12px;border:1px solid var(--line);box-shadow:var(--shadow)}
+.targets button{padding:7px 12px;border-radius:999px;border:0;background:var(--accent);color:var(--accent-fg);font:inherit;font-size:.85rem;font-weight:700;cursor:pointer}
+#books{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);padding:4px 16px;box-shadow:var(--shadow)}
+#books:has(> p){padding:24px 16px;text-align:center}
+.book{display:grid;grid-template-columns:44px 1fr auto;gap:12px;align-items:center;border-bottom:1px solid var(--line);padding:12px 0}
+.book:last-child{border-bottom:0}
+.book img,.book .ph{width:44px;height:62px;object-fit:cover;border-radius:4px;background:var(--accent-soft);box-shadow:inset -3px 0 0 rgba(0,0,0,.08)}
+.book b{display:block;line-height:1.3}.book small{color:var(--muted);display:block;margin:2px 0 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.book>div{min-width:0}
+.tag{display:inline-block;font-size:.72rem;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--accent-soft);color:var(--accent);margin-right:4px}
+.acts{display:flex;flex-direction:column;gap:4px}
+.mini{border:0;background:transparent;color:var(--accent);font:inherit;font-size:.82rem;font-weight:700;padding:6px 8px;border-radius:8px;cursor:pointer}
+.mini.del{color:var(--warn)}
+.mini:hover{background:var(--accent-soft)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
 </style>
 </head>
 <body>
-<div class="wrap">
-  <h1>Input Buku Perpustakaan</h1>
-  <p class="sub">SD Demangan · hasil diekspor ke CSV untuk diimpor ke SLiMS</p>
+<header><div class="in">
+  <p class="eyebrow">Perpustakaan SD Demangan</p>
+  <h1>Input Buku</h1>
+  <p class="sub">Scan, periksa, lalu ekspor ke SLiMS</p>
+</div></header>
+<div class="tabs"><div class="in">
   <nav role="tablist">
-    <button id="t-scan" aria-selected="true" onclick="tab('scan')">Scan ISBN</button>
+    <button id="t-scan" aria-selected="true" onclick="tab('scan')">Scan</button>
     <button id="t-foto" aria-selected="false" onclick="tab('foto')">Tanpa ISBN</button>
     <button id="t-list" aria-selected="false" onclick="tab('list')">Daftar (<span id="n" class="count">0</span>)</button>
   </nav>
+</div></div>
+<div class="wrap">
 
   <section id="p-scan">
     <div class="card">
@@ -110,7 +145,7 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1
       <label>Bahasa<select id="f-lang"><option>Indonesia</option><option>English</option><option>Jawa</option></select></label>
     </div>
     <div class="row">
-      <label>No. panggil / rak<input id="f-call" placeholder="mis. 398.2 KAN"></label>
+      <label>No. panggil / rak<input id="f-call" placeholder="otomatis bila dikosongkan"></label>
       <label>Jumlah eksemplar<input id="f-copies" type="number" min="1" value="1"></label>
     </div>
     <datalist id="pubs"></datalist>
@@ -123,6 +158,10 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1
 
   <section id="p-list" hidden>
     <div class="card">
+      <label>Data SLiMS saat ini (file CSV hasil Bibliografi → Ekspor)
+        <input type="file" id="slimsFile" accept=".csv,text/csv">
+      </label>
+      <div id="slimsStatus" class="status">Belum dimuat. Muat agar buku yang sudah ada di SLiMS terdeteksi dan nomor kode melanjutkan otomatis.</div>
       <div class="row">
         <label>Awalan kode eksemplar<input id="prefix" value="SDD"></label>
         <label>Nomor mulai<input id="startNo" type="number" value="1"></label>
@@ -130,6 +169,10 @@ input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1
       <div class="row">
         <button class="btn" onclick="exportCsv()">Unduh CSV untuk SLiMS</button>
         <button class="btn ghost" onclick="clearAll()" id="clearBtn">Hapus semua</button>
+      </div>
+      <div class="row">
+        <button class="btn ghost" onclick="backup()">Simpan cadangan</button>
+        <label class="btn ghost">Pulihkan cadangan<input type="file" id="restoreFile" accept=".json" hidden></label>
       </div>
       <div class="status">Di SLiMS: Bibliografi → Impor Data, pilih file ini. Coba 2–3 buku dulu.</div>
     </div>
@@ -170,6 +213,7 @@ const clean = s => (s || '').replace(/[^0-9Xx]/g, '').toUpperCase();
 async function lookup(raw) {
   const isbn = clean(raw);
   if (isbn.length !== 10 && isbn.length !== 13) { status('ISBN harus 10 atau 13 digit.', true); return; }
+  if (slims.isbns.includes(isbn)) { status('Buku ini SUDAH ADA di SLiMS. Jangan diinput lagi; tambahkan eksemplarnya langsung di SLiMS.', true); return; }
   const dup = books.find(b => b.isbn === isbn);
   if (dup) { dup.copies++; persist(); status(`Sudah ada: "${dup.title}". Eksemplar ditambah jadi ${dup.copies}.`); return; }
   status('Mencari ' + isbn + ' …');
@@ -244,6 +288,7 @@ function save() {
     year: $('f-year').value.trim(), place: $('f-place').value.trim(), isbn: clean($('f-isbn').value), cat: $('f-cat').value,
     lang: $('f-lang').value, call: $('f-call').value.trim(), copies: Math.max(1, +$('f-copies').value || 1), image: $('f-image').value };
   if (!b.title) { $('f-title').focus(); $('f-title').placeholder = 'Judul wajib diisi'; return; }
+  if (!b.call) b.call = callNumber(b);
   if (editing !== null) books[editing] = b; else books.unshift(b);
   persist(); closeForm(); status('Tersimpan. Scan buku berikutnya.');
 }
@@ -256,7 +301,7 @@ function render() {
     <div class="book">${b.image ? `<img src="${esc(b.image)}" alt="">` : '<span class="ph"></span>'}
       <div><b>${esc(b.title)}</b><small>${esc(b.authors || 'Tanpa pengarang')} · ${esc(b.publisher)} ${esc(b.year)}</small><br>
       <span class="tag">${esc(b.cat)}</span> <span class="tag count">${b.copies} eks</span> ${b.isbn ? '' : '<span class="tag">tanpa ISBN</span>'}</div>
-      <div class="row" style="flex-direction:column;gap:4px"><button class="btn ghost" onclick="editBook(${i})">Ubah</button><button class="btn ghost" onclick="delBook(${i})">Hapus</button></div>
+      <div class="acts"><button class="mini" onclick="editBook(${i})">Ubah</button><button class="mini del" onclick="delBook(${i})">Hapus</button></div>
     </div>`).join('') : '<p class="status">Belum ada buku. Mulai dari tab Scan ISBN.</p>';
 }
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
@@ -273,7 +318,7 @@ function clearAll() {
 // language, publish_place, classification, notes, image, sor, authors, topics, item_codes
 function exportCsv() {
   const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
-  const pre = $('prefix').value.trim(); let no = +$('startNo').value || 1;
+  const pre = $('prefix').value.trim(); let no = Math.max(+$('startNo').value || 1, slims.maxNo + 1);
   const rows = books.slice().reverse().map(b => {
     const items = Array.from({ length: b.copies }, () => '<' + pre + String(no++).padStart(5, '0') + '>').join('');
     const authors = b.authors.split(';').map(a => a.trim()).filter(Boolean).map(a => '<' + a + '>').join('');
@@ -284,6 +329,59 @@ function exportCsv() {
   a.download = 'buku_slims_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
   $('startNo').value = no;
 }
+// ---------- Call number: kode kelas + 3 huruf pengarang (atau judul) ----------
+// Sesuaikan dengan kebiasaan perpustakaan sekolah.
+const CLASS = { 'Buku Pelajaran': '370', 'Cerita Anak': '899.221', 'Dongeng': '398.2', 'Referensi': '030', 'Lainnya': '000' };
+function callNumber(b) {
+  const who = (b.authors.split(';')[0] || b.title).trim();
+  const last = who.split(/\s+/).pop() || '';
+  return (CLASS[b.cat] || '000') + ' ' + last.replace(/[^A-Za-z]/g, '').slice(0, 3).toUpperCase();
+}
+
+// ---------- Data SLiMS (dari file ekspor) ----------
+let slims = { isbns: [], maxNo: 0, count: 0 };
+try { slims = JSON.parse(localStorage.getItem('sdd-slims')) || slims; } catch (e) {}
+function parseCsv(t) {
+  const rows = []; let row = [], f = '', q = false;
+  for (let i = 0; i < t.length; i++) { const c = t[i];
+    if (q) { if (c === '"' && t[i+1] === '"') { f += '"'; i++; } else if (c === '"') q = false; else f += c; }
+    else if (c === '"') q = true; else if (c === ',') { row.push(f); f = ''; }
+    else if (c === '\n') { row.push(f); rows.push(row); row = []; f = ''; } else if (c !== '\r') f += c; }
+  if (f || row.length) { row.push(f); rows.push(row); }
+  return rows;
+}
+$('slimsFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  const rows = parseCsv(await f.text()); const pre = $('prefix').value.trim().toUpperCase();
+  const isbns = new Set(); let maxNo = 0;
+  rows.forEach(r => r.forEach(cell => {
+    const d = clean(cell); if ((d.length === 10 || d.length === 13) && /^\d/.test(d) && /^[0-9\-\s]+X?$/i.test(cell.trim())) isbns.add(d);
+    (cell.match(/<([^<>]+)>/g) || []).concat([cell]).forEach(x => { x = x.replace(/[<>]/g, '').trim().toUpperCase();
+      if (pre && x.startsWith(pre)) { const n = parseInt(x.slice(pre.length), 10); if (n > maxNo) maxNo = n; } });
+  }));
+  slims = { isbns: [...isbns], maxNo, count: rows.length };
+  try { localStorage.setItem('sdd-slims', JSON.stringify(slims)); } catch (e) {}
+  showSlims();
+});
+function showSlims() {
+  if (!slims.count) return;
+  $('slimsStatus').textContent = `Dimuat: ${slims.count} baris, ${slims.isbns.length} ISBN. Kode terakhir ${$('prefix').value}${String(slims.maxNo).padStart(5,'0')}.`;
+  if (+$('startNo').value <= slims.maxNo) $('startNo').value = slims.maxNo + 1;
+}
+
+// ---------- Cadangan ----------
+function backup() {
+  const blob = new Blob([JSON.stringify(books, null, 1)], { type: 'application/json' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'cadangan_buku_' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
+}
+$('restoreFile').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try { const add = JSON.parse(await f.text());
+    add.forEach(b => { const d = b.isbn && books.find(x => x.isbn === b.isbn); if (!d) books.push(b); });
+    persist(); } catch (err) { $('slimsStatus').textContent = 'File cadangan tidak bisa dibaca.'; }
+});
+showSlims();
 render();
 </script>
 </body>
