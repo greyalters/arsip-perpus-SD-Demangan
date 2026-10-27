@@ -104,6 +104,7 @@ input[type=file]{padding:10px;background:var(--accent-soft);border-style:dashed;
         <button class="btn ghost" onclick="lookup(isbnIn.value)">Cari</button>
       </div>
       <div id="scanStatus" class="status">Arahkan kamera ke barcode di sampul belakang.</div>
+      <label class="btn" id="kdtBtn" hidden>Foto halaman hak cipta (KDT)<input type="file" id="kdtPhoto" accept="image/*" capture="environment" hidden></label>
     </div>
   </section>
 
@@ -149,7 +150,7 @@ input[type=file]{padding:10px;background:var(--accent-soft);border-style:dashed;
       <label>Jumlah eksemplar<input id="f-copies" type="number" min="1" value="1"></label>
     </div>
     <datalist id="pubs"></datalist>
-    <input type="hidden" id="f-image">
+    <input type="hidden" id="f-image"><input type="hidden" id="f-collation">
     <div class="row">
       <button class="btn" onclick="save()">Simpan ke daftar</button>
       <button class="btn ghost" onclick="closeForm()">Batal</button>
@@ -222,18 +223,13 @@ async function lookup(raw) {
   if (memory[isbn]) { status('Dikenali dari buku yang pernah diinput. Periksa lalu simpan.'); openForm({ ...memory[isbn], isbn, copies: 1 }); return; }
   status('Mencari ' + isbn + ' …');
   let d = await fromGoogle(isbn).catch(() => null) || await fromOpenLibrary(isbn).catch(() => null);
-  if (!d) { status('Mencari di SIBI Kemendikbud & Perpusnas …'); d = await fromProxy(isbn).catch(() => null); }
   if (d) status('Ditemukan' + (d.source ? ' di ' + d.source : '') + '. Periksa lalu simpan.');
-  else { status('Tidak ditemukan di database online. Isi manual atau pakai tab "Tanpa ISBN".', true); d = {}; }
+  else {
+    status('Tidak ditemukan online. Foto halaman hak cipta (kotak KDT) agar terisi otomatis, atau isi manual.', true);
+    d = isbn.startsWith('978602244') ? { ...KEMDIKBUD } : {};
+    $('kdtBtn').hidden = false;
+  }
   openForm({ isbn, ...d });
-}
-// Server kecil di Vercel (api/lookup.js) yang mencari ke SIBI & Perpusnas.
-async function fromProxy(isbn) {
-  if (!location.protocol.startsWith('http')) return null;
-  const ctl = new AbortController(); setTimeout(() => ctl.abort(), 15000);
-  const r = await fetch('/api/lookup?isbn=' + isbn, { signal: ctl.signal });
-  if (!r.ok) return null;
-  const d = await r.json(); return d && d.title ? d : null;
 }
 async function fromGoogle(isbn) {
   const r = await (await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn)).json();
@@ -251,14 +247,31 @@ async function fromOpenLibrary(isbn) {
 }
 
 // ---------- OCR tap-to-fill ----------
+// Buku Kemendikbud (ISBN 978-602-244-…): isian awal bila tidak ditemukan online.
+const KEMDIKBUD = { publisher: 'Pusat Kurikulum dan Perbukuan', place: 'Jakarta', cat: 'Buku Pelajaran' };
+async function ocr(f, el) {
+  el.textContent = 'Membaca teks … (pertama kali agak lama, mengunduh data bahasa)';
+  const { data } = await Tesseract.recognize(f, 'ind+eng', { logger: m => {
+    if (m.status === 'recognizing text') el.textContent = 'Membaca teks … ' + Math.round(m.progress * 100) + '%'; } });
+  return data.lines.map(l => l.text.trim()).filter(t => t.length > 1);
+}
+// Dari tab Scan: foto KDT untuk buku yang tidak ditemukan; isi kolom yang masih kosong.
+$('kdtPhoto').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const g = autoGuess(await ocr(f, $('scanStatus')));
+    const ids = { title:'f-title', authors:'f-authors', publisher:'f-publisher', year:'f-year', place:'f-place', isbn:'f-isbn', collation:'f-collation' };
+    let n = 0;
+    for (const [k, id] of Object.entries(ids)) if (g[k] && (!$(id).value || (k === 'publisher' && $(id).value === KEMDIKBUD.publisher))) { $(id).value = g[k]; n++; }
+    status(n ? `${n} kolom terisi dari foto. Periksa lalu simpan.` : 'Teks KDT tidak terbaca. Coba foto lebih dekat, lurus dan terang, atau isi manual.', !n);
+  } catch (err) { status('Gagal membaca foto: ' + err.message, true); }
+  e.target.value = '';
+});
 $('photo').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   $('chips').innerHTML = ''; $('targets').hidden = true; picked = [];
-  $('ocrStatus').textContent = 'Membaca teks … (pertama kali agak lama, mengunduh data bahasa)';
   try {
-    const { data } = await Tesseract.recognize(f, 'ind+eng', { logger: m => {
-      if (m.status === 'recognizing text') $('ocrStatus').textContent = 'Membaca teks … ' + Math.round(m.progress * 100) + '%'; } });
-    const lines = data.lines.map(l => l.text.trim()).filter(t => t.length > 1);
+    const lines = await ocr(f, $('ocrStatus'));
     const guess = autoGuess(lines);
     openForm(guess);
     lines.forEach(t => { const b = document.createElement('button'); b.textContent = t;
@@ -268,13 +281,23 @@ $('photo').addEventListener('change', async e => {
   } catch (err) { $('ocrStatus').textContent = 'Gagal membaca foto: ' + err.message; }
 });
 function autoGuess(lines) {
-  const g = {}; const all = lines.join('\n');
-  const isbn = all.match(/ISBN[^0-9]*([0-9][0-9\- ]{8,16}[0-9Xx])/i); if (isbn) g.isbn = clean(isbn[1]);
-  const pub = all.match(/(?:Penerbit|Diterbitkan oleh)\s*:?\s*(.+)/i); if (pub) g.publisher = pub[1].trim();
-  const au = all.match(/(?:Penulis|Pengarang|Karya|Oleh)\s*:?\s*(.+)/i); if (au) g.authors = au[1].trim();
-  const yr = all.match(/(?:©|Cetakan[^0-9]*|tahun\s*)((?:19|20)\d{2})/i) || all.match(/\b(19[5-9]\d|20[0-3]\d)\b/); if (yr) g.year = yr[1];
-  const cat = all.match(/^(.*?)\s*:\s*Katalog Dalam Terbitan/im);
-  g.title = (all.match(/(?:Judul)\s*:?\s*(.+)/i) || [])[1] || '';
+  const g = {}; const all = lines.join('\n'); const flat = lines.join(' ').replace(/\s+/g, ' ');
+  // ISBN: pilih yang bertanda jilid (jil.3) bila ada, bukan "no.jil.lengkap".
+  const isbns = [...flat.matchAll(/ISBN[^0-9]{0,6}([0-9][0-9\- ]{8,18}[0-9Xx])\s*(\([^)]*\))?/gi)];
+  const best = isbns.find(m => m[2] && !/lengkap/i.test(m[2])) || isbns.find(m => !/lengkap/i.test(m[2] || '')) || isbns[0];
+  if (best) g.isbn = clean(best[1]);
+  // KDT: "Judul / Penulis. -- Kota: Penerbit, 2021."
+  const kdt = flat.match(/([^.\/]{3,160}?)\s*\/\s*([^\/]{3,200}?)\s*\.?\s*[-–—]{1,2}\s*([A-Z][A-Za-z .]{2,30}?)\s*:\s*([^,]{3,120}?),\s*((?:19|20)\d{2})/);
+  if (kdt) {
+    g.title = kdt[1].replace(/^.*?Katalog Dalam Terbitan\s*\(?KDT\)?\s*/i, '').replace(/^[A-Z][^,]{1,40},\s*[^.]{1,40}\.?\s+(?=[A-Z])/, '').trim();
+    g.authors = kdt[2].split(/\s*(?:,|;|\bdan\b|&)\s*/).filter(a => a.length > 2).join('; ');
+    g.place = kdt[3].trim(); g.publisher = kdt[4].trim(); g.year = kdt[5];
+  }
+  const col = flat.match(/([ivxlcdm]+\s*,\s*)?\d{1,4}\s*hlm\.?[^;]{0,30};\s*\d{1,2}\s*cm/i); if (col) g.collation = col[0].trim();
+  if (!g.publisher) { const pub = all.match(/(?:Penerbit|Diterbitkan oleh)\s*:?\s*(.+)/i); if (pub) g.publisher = pub[1].trim(); }
+  if (!g.authors) { const au = all.match(/(?:Penulis|Pengarang|Karya|Oleh)\s*:?\s*(.+)/i); if (au) g.authors = au[1].trim().replace(/\s*,\s*/g, '; '); }
+  if (!g.year) { const yr = all.match(/(?:©|Cetakan[^0-9]*|tahun\s*)((?:19|20)\d{2})/i) || all.match(/\b(19[5-9]\d|20[0-3]\d)\b/); if (yr) g.year = yr[1]; }
+  if (!g.title) g.title = (all.match(/(?:Judul)\s*:?\s*(.+)/i) || [])[1] || '';
   return g;
 }
 function assign(field) {
@@ -292,14 +315,14 @@ function openForm(d, idx) {
   $('f-title').value = d.title || ''; $('f-authors').value = d.authors || ''; $('f-publisher').value = d.publisher || '';
   $('f-year').value = d.year || ''; $('f-place').value = d.place || ''; $('f-isbn').value = d.isbn || '';
   $('f-cat').value = d.cat || ($('p-foto').hidden ? 'Buku Pelajaran' : 'Cerita Anak');
-  $('f-lang').value = d.lang || 'Indonesia'; $('f-call').value = d.call || ''; $('f-copies').value = d.copies || 1; $('f-image').value = d.image || '';
+  $('f-lang').value = d.lang || 'Indonesia'; $('f-call').value = d.call || ''; $('f-copies').value = d.copies || 1; $('f-image').value = d.image || ''; $('f-collation').value = d.collation || '';
   $('p-form').hidden = false; $('p-form').scrollIntoView({ behavior: 'smooth' });
 }
-function closeForm() { $('p-form').hidden = true; editing = null; lastCode = ''; }
+function closeForm() { $('kdtBtn').hidden = true; $('p-form').hidden = true; editing = null; lastCode = ''; }
 function save() {
   const b = { title: $('f-title').value.trim(), authors: $('f-authors').value.trim(), publisher: $('f-publisher').value.trim(),
     year: $('f-year').value.trim(), place: $('f-place').value.trim(), isbn: clean($('f-isbn').value), cat: $('f-cat').value,
-    lang: $('f-lang').value, call: $('f-call').value.trim(), copies: Math.max(1, +$('f-copies').value || 1), image: $('f-image').value };
+    lang: $('f-lang').value, call: $('f-call').value.trim(), copies: Math.max(1, +$('f-copies').value || 1), image: $('f-image').value, collation: $('f-collation').value };
   if (!b.title) { $('f-title').focus(); $('f-title').placeholder = 'Judul wajib diisi'; return; }
   if (!b.call) b.call = callNumber(b);
   if (b.isbn) { const { copies, ...rest } = b; memory[b.isbn] = rest; saveMemory(); }
@@ -336,7 +359,7 @@ function exportCsv() {
   const rows = books.slice().reverse().map(b => {
     const items = Array.from({ length: b.copies }, () => '<' + pre + String(no++).padStart(5, '0') + '>').join('');
     const authors = b.authors.split(';').map(a => a.trim()).filter(Boolean).map(a => '<' + a + '>').join('');
-    return [b.title, 'Text', '', b.isbn, b.publisher, b.year, '', '', b.call, b.lang, b.place, '', '', '', b.authors, authors, '<' + b.cat + '>', items].map(q).join(',');
+    return [b.title, 'Text', '', b.isbn, b.publisher, b.year, b.collation || '', '', b.call, b.lang, b.place, '', '', '', b.authors, authors, '<' + b.cat + '>', items].map(q).join(',');
   });
   const blob = new Blob([rows.join('\r\n')], { type: 'text/csv' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
