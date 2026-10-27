@@ -184,6 +184,9 @@ input[type=file]{padding:10px;background:var(--accent-soft);border-style:dashed;
 const $ = id => document.getElementById(id);
 let books = [];
 try { books = JSON.parse(localStorage.getItem('sdd-books') || '[]'); } catch (e) {}
+let memory = {};
+try { memory = JSON.parse(localStorage.getItem('sdd-memory') || '{}'); } catch (e) {}
+const saveMemory = () => { try { localStorage.setItem('sdd-memory', JSON.stringify(memory)); } catch (e) {} };
 let editing = null, scanner = null, camOn = false, picked = [];
 const persist = () => { try { localStorage.setItem('sdd-books', JSON.stringify(books)); } catch (e) {} render(); };
 
@@ -216,11 +219,21 @@ async function lookup(raw) {
   if (slims.isbns.includes(isbn)) { status('Buku ini SUDAH ADA di SLiMS. Jangan diinput lagi; tambahkan eksemplarnya langsung di SLiMS.', true); return; }
   const dup = books.find(b => b.isbn === isbn);
   if (dup) { dup.copies++; persist(); status(`Sudah ada: "${dup.title}". Eksemplar ditambah jadi ${dup.copies}.`); return; }
+  if (memory[isbn]) { status('Dikenali dari buku yang pernah diinput. Periksa lalu simpan.'); openForm({ ...memory[isbn], isbn, copies: 1 }); return; }
   status('Mencari ' + isbn + ' …');
   let d = await fromGoogle(isbn).catch(() => null) || await fromOpenLibrary(isbn).catch(() => null);
-  if (d) status('Ditemukan. Periksa lalu simpan.');
+  if (!d) { status('Mencari di SIBI Kemendikbud & Perpusnas …'); d = await fromProxy(isbn).catch(() => null); }
+  if (d) status('Ditemukan' + (d.source ? ' di ' + d.source : '') + '. Periksa lalu simpan.');
   else { status('Tidak ditemukan di database online. Isi manual atau pakai tab "Tanpa ISBN".', true); d = {}; }
   openForm({ isbn, ...d });
+}
+// Server kecil di Vercel (api/lookup.js) yang mencari ke SIBI & Perpusnas.
+async function fromProxy(isbn) {
+  if (!location.protocol.startsWith('http')) return null;
+  const ctl = new AbortController(); setTimeout(() => ctl.abort(), 15000);
+  const r = await fetch('/api/lookup?isbn=' + isbn, { signal: ctl.signal });
+  if (!r.ok) return null;
+  const d = await r.json(); return d && d.title ? d : null;
 }
 async function fromGoogle(isbn) {
   const r = await (await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn)).json();
@@ -289,6 +302,7 @@ function save() {
     lang: $('f-lang').value, call: $('f-call').value.trim(), copies: Math.max(1, +$('f-copies').value || 1), image: $('f-image').value };
   if (!b.title) { $('f-title').focus(); $('f-title').placeholder = 'Judul wajib diisi'; return; }
   if (!b.call) b.call = callNumber(b);
+  if (b.isbn) { const { copies, ...rest } = b; memory[b.isbn] = rest; saveMemory(); }
   if (editing !== null) books[editing] = b; else books.unshift(b);
   persist(); closeForm(); status('Tersimpan. Scan buku berikutnya.');
 }
@@ -354,6 +368,11 @@ $('slimsFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
   const rows = parseCsv(await f.text()); const pre = $('prefix').value.trim().toUpperCase();
   const isbns = new Set(); let maxNo = 0;
+  rows.forEach(r => { const i = clean(r[3] || '');
+    if (r.length >= 16 && (i.length === 10 || i.length === 13) && r[0] && !memory[i])
+      memory[i] = { title: r[0], publisher: r[4] || '', year: r[5] || '', call: r[8] || '', place: r[10] || '',
+        authors: (r[15] || '').match(/<([^<>]+)>/g)?.map(x => x.slice(1, -1)).join('; ') || r[14] || '' }; });
+  saveMemory();
   rows.forEach(r => r.forEach(cell => {
     const d = clean(cell); if ((d.length === 10 || d.length === 13) && /^\d/.test(d) && /^[0-9\-\s]+X?$/i.test(cell.trim())) isbns.add(d);
     (cell.match(/<([^<>]+)>/g) || []).concat([cell]).forEach(x => { x = x.replace(/[<>]/g, '').trim().toUpperCase();
@@ -371,13 +390,14 @@ function showSlims() {
 
 // ---------- Cadangan ----------
 function backup() {
-  const blob = new Blob([JSON.stringify(books, null, 1)], { type: 'application/json' });
+  const blob = new Blob([JSON.stringify({ books, memory }, null, 1)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
   a.download = 'cadangan_buku_' + new Date().toISOString().slice(0, 10) + '.json'; a.click();
 }
 $('restoreFile').addEventListener('change', async e => {
   const f = e.target.files[0]; if (!f) return;
-  try { const add = JSON.parse(await f.text());
+  try { const data = JSON.parse(await f.text()); const add = Array.isArray(data) ? data : data.books || [];
+    Object.assign(memory, data.memory || {}); saveMemory();
     add.forEach(b => { const d = b.isbn && books.find(x => x.isbn === b.isbn); if (!d) books.push(b); });
     persist(); } catch (err) { $('slimsStatus').textContent = 'File cadangan tidak bisa dibaca.'; }
 });
