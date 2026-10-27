@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Input Buku Perpustakaan SD Demangan</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.0/dist/tesseract.min.js"></script>
+<style>
+/* Layout: one narrow column, phone-first. Three tabs (Scan / Foto / Daftar) */
+:root{
+  --bg:#f6f7f2; --surface:#ffffff; --fg:#1f2a24; --muted:#5f6b63; --line:#d9ded6;
+  --accent:#2f6b4f; --accent-fg:#ffffff; --warn:#a4561b; --chip:#e7eee8;
+  --display:"Fraunces",Georgia,serif; --body:"Atkinson Hyperlegible",system-ui,sans-serif;
+}
+@media (prefers-color-scheme: dark){:root{
+  --bg:#141a16; --surface:#1c241f; --fg:#e6ece7; --muted:#9aa79f; --line:#2f3a33;
+  --accent:#6fbf94; --accent-fg:#0f1a14; --warn:#e2a06a; --chip:#26322b; color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 var(--body)}
+.wrap{max-width:640px;margin:0 auto;padding-block:16px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+h1{font-family:var(--display);font-size:1.5rem;margin:0;text-wrap:balance}
+.sub{color:var(--muted);margin:2px 0 16px;font-size:.9rem}
+nav{display:flex;gap:6px;margin-bottom:16px}
+nav button{flex:1;padding:10px;border:1px solid var(--line);background:var(--surface);color:var(--fg);border-radius:8px;font:inherit;font-weight:700}
+nav button[aria-selected=true]{background:var(--accent);color:var(--accent-fg);border-color:var(--accent)}
+section{display:grid;gap:12px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;gap:10px}
+label{display:grid;gap:4px;font-size:.85rem;color:var(--muted)}
+input,select,textarea{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:9px;width:100%}
+.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1;min-width:120px}
+.btn{padding:11px 14px;border-radius:8px;border:1px solid var(--accent);background:var(--accent);color:var(--accent-fg);font:inherit;font-weight:700;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--accent)}
+.btn:focus-visible,nav button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+#reader{width:100%;border-radius:8px;overflow:hidden}
+.status{font-size:.9rem;color:var(--muted)}.status.warn{color:var(--warn)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;max-height:260px;overflow:auto}
+.chips button{border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:6px;padding:6px 8px;font:inherit;font-size:.85rem;text-align:left}
+.chips button.on{border-color:var(--accent);outline:2px solid var(--accent)}
+.targets{display:flex;flex-wrap:wrap;gap:6px}
+.targets button{padding:6px 10px;border-radius:999px;border:1px solid var(--accent);background:transparent;color:var(--accent);font:inherit;font-size:.85rem}
+.book{display:grid;grid-template-columns:48px 1fr auto;gap:10px;align-items:start;border-bottom:1px solid var(--line);padding:10px 0}
+.book img,.book .ph{width:48px;height:66px;object-fit:cover;border-radius:4px;background:var(--chip)}
+.book b{display:block}.book small{color:var(--muted)}
+.book div{min-width:0}
+.tag{font-size:.75rem;padding:1px 6px;border-radius:999px;background:var(--chip);color:var(--muted)}
+.count{font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Input Buku Perpustakaan</h1>
+  <p class="sub">SD Demangan · hasil diekspor ke CSV untuk diimpor ke SLiMS</p>
+  <nav role="tablist">
+    <button id="t-scan" aria-selected="true" onclick="tab('scan')">Scan ISBN</button>
+    <button id="t-foto" aria-selected="false" onclick="tab('foto')">Tanpa ISBN</button>
+    <button id="t-list" aria-selected="false" onclick="tab('list')">Daftar (<span id="n" class="count">0</span>)</button>
+  </nav>
+
+  <section id="p-scan">
+    <div class="card">
+      <div id="reader"></div>
+      <div class="row">
+        <button class="btn" id="camBtn" onclick="toggleCam()">Buka kamera</button>
+      </div>
+      <div class="row">
+        <input id="isbnIn" inputmode="numeric" placeholder="atau ketik ISBN (13 digit)">
+        <button class="btn ghost" onclick="lookup(isbnIn.value)">Cari</button>
+      </div>
+      <div id="scanStatus" class="status">Arahkan kamera ke barcode di sampul belakang.</div>
+    </div>
+  </section>
+
+  <section id="p-foto" hidden>
+    <div class="card">
+      <label>Foto halaman hak cipta atau sampul
+        <input type="file" id="photo" accept="image/*" capture="environment">
+      </label>
+      <div id="ocrStatus" class="status">Teks dibaca langsung di HP, gratis. Lalu ketuk teks, ketuk kolomnya.</div>
+      <div id="chips" class="chips"></div>
+      <div class="targets" id="targets" hidden>
+        <span class="status">Isi ke:</span>
+        <button onclick="assign('title')">Judul</button>
+        <button onclick="assign('authors')">Pengarang</button>
+        <button onclick="assign('publisher')">Penerbit</button>
+        <button onclick="assign('year')">Tahun</button>
+        <button onclick="assign('place')">Kota</button>
+        <button onclick="assign('isbn')">ISBN</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-form" class="card" hidden>
+    <strong>Periksa data buku</strong>
+    <label>Judul<input id="f-title"></label>
+    <label>Pengarang (pisahkan dengan ;)<input id="f-authors"></label>
+    <div class="row">
+      <label>Penerbit<input id="f-publisher" list="pubs"></label>
+      <label>Tahun<input id="f-year" inputmode="numeric"></label>
+    </div>
+    <div class="row">
+      <label>Kota terbit<input id="f-place"></label>
+      <label>ISBN<input id="f-isbn"></label>
+    </div>
+    <div class="row">
+      <label>Kategori
+        <select id="f-cat"><option>Buku Pelajaran</option><option>Cerita Anak</option><option>Dongeng</option><option>Referensi</option><option>Lainnya</option></select>
+      </label>
+      <label>Bahasa<select id="f-lang"><option>Indonesia</option><option>English</option><option>Jawa</option></select></label>
+    </div>
+    <div class="row">
+      <label>No. panggil / rak<input id="f-call" placeholder="mis. 398.2 KAN"></label>
+      <label>Jumlah eksemplar<input id="f-copies" type="number" min="1" value="1"></label>
+    </div>
+    <datalist id="pubs"></datalist>
+    <input type="hidden" id="f-image">
+    <div class="row">
+      <button class="btn" onclick="save()">Simpan ke daftar</button>
+      <button class="btn ghost" onclick="closeForm()">Batal</button>
+    </div>
+  </section>
+
+  <section id="p-list" hidden>
+    <div class="card">
+      <div class="row">
+        <label>Awalan kode eksemplar<input id="prefix" value="SDD"></label>
+        <label>Nomor mulai<input id="startNo" type="number" value="1"></label>
+      </div>
+      <div class="row">
+        <button class="btn" onclick="exportCsv()">Unduh CSV untuk SLiMS</button>
+        <button class="btn ghost" onclick="clearAll()" id="clearBtn">Hapus semua</button>
+      </div>
+      <div class="status">Di SLiMS: Bibliografi → Impor Data, pilih file ini. Coba 2–3 buku dulu.</div>
+    </div>
+    <div id="books"></div>
+  </section>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+let books = [];
+try { books = JSON.parse(localStorage.getItem('sdd-books') || '[]'); } catch (e) {}
+let editing = null, scanner = null, camOn = false, picked = [];
+const persist = () => { try { localStorage.setItem('sdd-books', JSON.stringify(books)); } catch (e) {} render(); };
+
+function tab(t) {
+  ['scan','foto','list'].forEach(k => { $('p-'+k).hidden = k !== t; $('t-'+k).setAttribute('aria-selected', k === t); });
+  if (t !== 'scan' && camOn) toggleCam();
+}
+
+// ---------- Barcode ----------
+async function toggleCam() {
+  if (camOn) { await scanner.stop().catch(()=>{}); camOn = false; $('camBtn').textContent = 'Buka kamera'; return; }
+  scanner = scanner || new Html5Qrcode('reader', { formatsToSupport: [Html5QrcodeSupportedFormats.EAN_13] });
+  try {
+    await scanner.start({ facingMode: 'environment' }, { fps: 10, qrbox: { width: 260, height: 120 } }, code => {
+      if (code === lastCode) return; lastCode = code;
+      if (navigator.vibrate) navigator.vibrate(80);
+      lookup(code);
+    });
+    camOn = true; $('camBtn').textContent = 'Tutup kamera';
+  } catch (e) { status('Kamera tidak bisa dibuka. Pastikan situs memakai HTTPS dan izin kamera diberikan.', true); }
+}
+let lastCode = '';
+const status = (m, w) => { $('scanStatus').textContent = m; $('scanStatus').className = 'status' + (w ? ' warn' : ''); };
+
+// ---------- Lookup ----------
+const clean = s => (s || '').replace(/[^0-9Xx]/g, '').toUpperCase();
+async function lookup(raw) {
+  const isbn = clean(raw);
+  if (isbn.length !== 10 && isbn.length !== 13) { status('ISBN harus 10 atau 13 digit.', true); return; }
+  const dup = books.find(b => b.isbn === isbn);
+  if (dup) { dup.copies++; persist(); status(`Sudah ada: "${dup.title}". Eksemplar ditambah jadi ${dup.copies}.`); return; }
+  status('Mencari ' + isbn + ' …');
+  let d = await fromGoogle(isbn).catch(() => null) || await fromOpenLibrary(isbn).catch(() => null);
+  if (d) status('Ditemukan. Periksa lalu simpan.');
+  else { status('Tidak ditemukan di database online. Isi manual atau pakai tab "Tanpa ISBN".', true); d = {}; }
+  openForm({ isbn, ...d });
+}
+async function fromGoogle(isbn) {
+  const r = await (await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn)).json();
+  const v = r.items && r.items[0] && r.items[0].volumeInfo; if (!v) return null;
+  return { title: [v.title, v.subtitle].filter(Boolean).join(': '), authors: (v.authors || []).join('; '),
+    publisher: v.publisher || '', year: (v.publishedDate || '').slice(0, 4),
+    lang: v.language === 'en' ? 'English' : 'Indonesia', image: v.imageLinks ? v.imageLinks.thumbnail.replace('http:', 'https:') : '' };
+}
+async function fromOpenLibrary(isbn) {
+  const r = await (await fetch(`https://openlibrary.org/api/books?bibkeys=ISBN:${isbn}&format=json&jscmd=data`)).json();
+  const v = r['ISBN:' + isbn]; if (!v) return null;
+  return { title: v.title || '', authors: (v.authors || []).map(a => a.name).join('; '),
+    publisher: (v.publishers || [])[0]?.name || '', place: (v.publish_places || [])[0]?.name || '',
+    year: ((v.publish_date || '').match(/\d{4}/) || [''])[0], image: v.cover ? v.cover.medium : '' };
+}
+
+// ---------- OCR tap-to-fill ----------
+$('photo').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('chips').innerHTML = ''; $('targets').hidden = true; picked = [];
+  $('ocrStatus').textContent = 'Membaca teks … (pertama kali agak lama, mengunduh data bahasa)';
+  try {
+    const { data } = await Tesseract.recognize(f, 'ind+eng', { logger: m => {
+      if (m.status === 'recognizing text') $('ocrStatus').textContent = 'Membaca teks … ' + Math.round(m.progress * 100) + '%'; } });
+    const lines = data.lines.map(l => l.text.trim()).filter(t => t.length > 1);
+    const guess = autoGuess(lines);
+    openForm(guess);
+    lines.forEach(t => { const b = document.createElement('button'); b.textContent = t;
+      b.onclick = () => { b.classList.toggle('on'); picked = [...$('chips').querySelectorAll('.on')].map(x => x.textContent); $('targets').hidden = !picked.length; };
+      $('chips').appendChild(b); });
+    $('ocrStatus').textContent = lines.length ? 'Ketuk satu atau beberapa baris, lalu pilih kolomnya.' : 'Tidak ada teks terbaca. Coba foto lebih dekat dan terang.';
+  } catch (err) { $('ocrStatus').textContent = 'Gagal membaca foto: ' + err.message; }
+});
+function autoGuess(lines) {
+  const g = {}; const all = lines.join('\n');
+  const isbn = all.match(/ISBN[^0-9]*([0-9][0-9\- ]{8,16}[0-9Xx])/i); if (isbn) g.isbn = clean(isbn[1]);
+  const pub = all.match(/(?:Penerbit|Diterbitkan oleh)\s*:?\s*(.+)/i); if (pub) g.publisher = pub[1].trim();
+  const au = all.match(/(?:Penulis|Pengarang|Karya|Oleh)\s*:?\s*(.+)/i); if (au) g.authors = au[1].trim();
+  const yr = all.match(/(?:©|Cetakan[^0-9]*|tahun\s*)((?:19|20)\d{2})/i) || all.match(/\b(19[5-9]\d|20[0-3]\d)\b/); if (yr) g.year = yr[1];
+  const cat = all.match(/^(.*?)\s*:\s*Katalog Dalam Terbitan/im);
+  g.title = (all.match(/(?:Judul)\s*:?\s*(.+)/i) || [])[1] || '';
+  return g;
+}
+function assign(field) {
+  const id = { title:'f-title', authors:'f-authors', publisher:'f-publisher', year:'f-year', place:'f-place', isbn:'f-isbn' }[field];
+  let v = picked.join(field === 'authors' ? '; ' : ' ');
+  if (field === 'year') v = (v.match(/\d{4}/) || [v])[0];
+  if (field === 'isbn') v = clean(v);
+  $(id).value = v;
+  $('chips').querySelectorAll('.on').forEach(x => x.classList.remove('on')); picked = []; $('targets').hidden = true;
+}
+
+// ---------- Form ----------
+function openForm(d, idx) {
+  editing = idx ?? null;
+  $('f-title').value = d.title || ''; $('f-authors').value = d.authors || ''; $('f-publisher').value = d.publisher || '';
+  $('f-year').value = d.year || ''; $('f-place').value = d.place || ''; $('f-isbn').value = d.isbn || '';
+  $('f-cat').value = d.cat || ($('p-foto').hidden ? 'Buku Pelajaran' : 'Cerita Anak');
+  $('f-lang').value = d.lang || 'Indonesia'; $('f-call').value = d.call || ''; $('f-copies').value = d.copies || 1; $('f-image').value = d.image || '';
+  $('p-form').hidden = false; $('p-form').scrollIntoView({ behavior: 'smooth' });
+}
+function closeForm() { $('p-form').hidden = true; editing = null; lastCode = ''; }
+function save() {
+  const b = { title: $('f-title').value.trim(), authors: $('f-authors').value.trim(), publisher: $('f-publisher').value.trim(),
+    year: $('f-year').value.trim(), place: $('f-place').value.trim(), isbn: clean($('f-isbn').value), cat: $('f-cat').value,
+    lang: $('f-lang').value, call: $('f-call').value.trim(), copies: Math.max(1, +$('f-copies').value || 1), image: $('f-image').value };
+  if (!b.title) { $('f-title').focus(); $('f-title').placeholder = 'Judul wajib diisi'; return; }
+  if (editing !== null) books[editing] = b; else books.unshift(b);
+  persist(); closeForm(); status('Tersimpan. Scan buku berikutnya.');
+}
+
+// ---------- List ----------
+function render() {
+  $('n').textContent = books.reduce((s, b) => s + b.copies, 0);
+  $('pubs').innerHTML = [...new Set(books.map(b => b.publisher).filter(Boolean))].map(p => `<option value="${esc(p)}">`).join('');
+  $('books').innerHTML = books.length ? books.map((b, i) => `
+    <div class="book">${b.image ? `<img src="${esc(b.image)}" alt="">` : '<span class="ph"></span>'}
+      <div><b>${esc(b.title)}</b><small>${esc(b.authors || 'Tanpa pengarang')} · ${esc(b.publisher)} ${esc(b.year)}</small><br>
+      <span class="tag">${esc(b.cat)}</span> <span class="tag count">${b.copies} eks</span> ${b.isbn ? '' : '<span class="tag">tanpa ISBN</span>'}</div>
+      <div class="row" style="flex-direction:column;gap:4px"><button class="btn ghost" onclick="editBook(${i})">Ubah</button><button class="btn ghost" onclick="delBook(${i})">Hapus</button></div>
+    </div>`).join('') : '<p class="status">Belum ada buku. Mulai dari tab Scan ISBN.</p>';
+}
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;' }[c]));
+function editBook(i) { tab(books[i].isbn ? 'scan' : 'foto'); openForm(books[i], i); }
+function delBook(i) { books.splice(i, 1); persist(); }
+let armed = false;
+function clearAll() {
+  if (!armed) { armed = true; $('clearBtn').textContent = 'Ketuk lagi untuk yakin'; setTimeout(() => { armed = false; $('clearBtn').textContent = 'Hapus semua'; }, 3000); return; }
+  books = []; persist(); armed = false; $('clearBtn').textContent = 'Hapus semua';
+}
+
+// SLiMS 9 bibliography import column order (assumed; adjust after seeing a real export):
+// title, gmd, edition, isbn_issn, publisher, publish_year, collation, series_title, call_number,
+// language, publish_place, classification, notes, image, sor, authors, topics, item_codes
+function exportCsv() {
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const pre = $('prefix').value.trim(); let no = +$('startNo').value || 1;
+  const rows = books.slice().reverse().map(b => {
+    const items = Array.from({ length: b.copies }, () => '<' + pre + String(no++).padStart(5, '0') + '>').join('');
+    const authors = b.authors.split(';').map(a => a.trim()).filter(Boolean).map(a => '<' + a + '>').join('');
+    return [b.title, 'Text', '', b.isbn, b.publisher, b.year, '', '', b.call, b.lang, b.place, '', '', '', b.authors, authors, '<' + b.cat + '>', items].map(q).join(',');
+  });
+  const blob = new Blob([rows.join('\r\n')], { type: 'text/csv' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+  a.download = 'buku_slims_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click();
+  $('startNo').value = no;
+}
+render();
+</script>
+</body>
+</html>
